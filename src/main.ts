@@ -1,26 +1,77 @@
 import * as core from '@actions/core'
-import { wait } from './wait'
+import { GoogleAuth } from 'google-auth-library'
+import { google } from 'googleapis'
+import { JWTInput } from 'google-auth-library/build/src/auth/credentials'
+
+const INPUT_CREDENTIALS = 'credentials'
+const INPUT_TEMPLATE_SPREADSHEET_ID = 'templateSpreadsheetId'
+const INPUT_TARGET_DRIVE_ID = 'targetDriveId'
+const INPUT_COLUMN_START_LETTER = 'columnStartLetter'
+const INPUT_TARGET_SPREADSHEET_NAME = 'targetSpreadsheetName'
+const INPUT_DATA = 'data'
+
+const OUTPUT_SPREADSHEET_ID = 'spreadsheetId'
+
+type Data = string[][]
 
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
  */
 export async function run(): Promise<void> {
-  try {
-    const ms: string = core.getInput('milliseconds')
+  const credentials: JWTInput = JSON.parse(core.getInput(INPUT_CREDENTIALS))
+  const templateSpreadsheetId: string = core.getInput(
+    INPUT_TEMPLATE_SPREADSHEET_ID
+  )
+  const targetDriveId: string = core.getInput(INPUT_TARGET_DRIVE_ID)
+  const columnStartLetter: string = core.getInput(INPUT_COLUMN_START_LETTER)
+  const spreadsheetName: string = core.getInput(INPUT_TARGET_SPREADSHEET_NAME)
+  const data: Data = JSON.parse(core.getInput(INPUT_DATA))
 
-    // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-    core.debug(`Waiting ${ms} milliseconds ...`)
+  const auth = new GoogleAuth({
+    credentials,
+    scopes: [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive'
+    ]
+  })
 
-    // Log the current timestamp, wait, then log the new timestamp
-    core.debug(new Date().toTimeString())
-    await wait(parseInt(ms, 10))
-    core.debug(new Date().toTimeString())
+  const sheetApi = google.sheets({ version: 'v4', auth })
+  const driveApi = google.drive({ version: 'v3', auth })
 
-    // Set outputs for other workflow steps to use
-    core.setOutput('time', new Date().toTimeString())
-  } catch (error) {
-    // Fail the workflow run if an error occurs
-    if (error instanceof Error) core.setFailed(error.message)
+  const fileResponse = await driveApi.files.copy({
+    fileId: templateSpreadsheetId,
+    requestBody: {
+      driveId: targetDriveId,
+      name: spreadsheetName
+    }
+  })
+
+  if (fileResponse.data.id == null) {
+    return core.setFailed('File copy failed')
   }
+
+  const targetSpreadsheetId = fileResponse.data.id
+  core.setOutput(OUTPUT_SPREADSHEET_ID, targetSpreadsheetId)
+
+  const spreadsheetResponse = await sheetApi.spreadsheets.get({
+    spreadsheetId: targetSpreadsheetId
+  })
+
+  const targetSheet = spreadsheetResponse.data.sheets?.[0]
+
+  if (targetSheet === undefined) {
+    return core.setFailed('Spreadsheet read failed')
+  }
+
+  const range = `${targetSheet.properties?.title}!${columnStartLetter}${targetSheet.properties?.gridProperties?.rowCount}`
+  sheetApi.spreadsheets.values.update({
+    spreadsheetId: targetSpreadsheetId,
+    range,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      majorDimension: 'ROWS',
+      values: data
+    }
+  })
 }
