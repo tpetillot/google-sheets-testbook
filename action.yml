@@ -1,23 +1,33 @@
-name: 'The name of your action here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
-
-# Add your action's branding here. This will appear on the GitHub Marketplace.
-branding:
-  icon: 'heart'
-  color: 'red'
+name: 'Google Spreadsheets TestBook'
+description: 'Edit Google Spreadsheets TestBook'
+author: 'tpetillot'
 
 # Define your inputs here.
 inputs:
-  milliseconds:
-    description: 'Your input description here'
+  credentials:
+    description: 'Google credentials'
     required: true
-    default: '1000'
+  templateSpreadsheetId:
+    description: 'Template spreadsheet ID'
+    required: true
+  targetDriveId:
+    description: 'Drive ID of destination folder'
+    required: true
+  data:
+    description: '[["A1", "A2"], ["B1", "B2"]]'
+    required: true
+    default: '[]'
+  columnStartLetter:
+    description: 'Column letter of data range'
+    required: true
+    default: 'A'
+  targetSpreadsheetName:
+    description: 'Target spreadsheet name'
+    required: true
 
-# Define your outputs here.
 outputs:
-  time:
-    description: 'Your output description here'
+  spreadsheetId:
+    description: 'New spreadsheet ID'
 
 runs:
   using: node20
